@@ -1,0 +1,1041 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+<title>Incident Response Triage — OpenEnv</title>
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;600;700&family=Inter:wght@400;500;600;700&display=swap');
+
+  :root {
+    --bg: #0a0e17;
+    --bg2: #0f1623;
+    --bg3: #151d2e;
+    --border: #1e2d45;
+    --border2: #253650;
+    --text: #c8d8f0;
+    --text2: #7a9abf;
+    --text3: #4a6a8f;
+    --red: #ff4757;
+    --orange: #ff6b35;
+    --yellow: #ffd32a;
+    --green: #2ed573;
+    --blue: #1e90ff;
+    --cyan: #00d2ff;
+    --purple: #a55eea;
+    --accent: #00d2ff;
+    --mono: 'JetBrains Mono', monospace;
+    --sans: 'Inter', sans-serif;
+  }
+
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+
+  body {
+    background: var(--bg);
+    color: var(--text);
+    font-family: var(--sans);
+    min-height: 100vh;
+    overflow-x: hidden;
+  }
+
+  /* ── Top bar ── */
+  .topbar {
+    background: var(--bg2);
+    border-bottom: 1px solid var(--border);
+    padding: 0 24px;
+    height: 56px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    position: sticky;
+    top: 0;
+    z-index: 100;
+  }
+
+  .topbar-left {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+  }
+
+  .logo {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    font-family: var(--mono);
+    font-weight: 700;
+    font-size: 14px;
+    color: var(--cyan);
+    letter-spacing: 0.02em;
+  }
+
+  .logo-dot {
+    width: 8px; height: 8px;
+    background: var(--red);
+    border-radius: 50%;
+    animation: pulse 1.5s infinite;
+  }
+
+  @keyframes pulse {
+    0%, 100% { opacity: 1; box-shadow: 0 0 0 0 rgba(255,71,87,0.4); }
+    50% { opacity: 0.8; box-shadow: 0 0 0 6px rgba(255,71,87,0); }
+  }
+
+  .badge {
+    font-family: var(--mono);
+    font-size: 10px;
+    padding: 2px 8px;
+    border-radius: 3px;
+    font-weight: 600;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+  }
+  .badge-openenv { background: rgba(0,210,255,0.12); color: var(--cyan); border: 1px solid rgba(0,210,255,0.25); }
+  .badge-live { background: rgba(46,213,115,0.12); color: var(--green); border: 1px solid rgba(46,213,115,0.25); }
+
+  .status-dot {
+    display: inline-block;
+    width: 6px; height: 6px;
+    border-radius: 50%;
+    background: var(--green);
+    margin-right: 6px;
+    animation: pulse-green 2s infinite;
+  }
+  @keyframes pulse-green {
+    0%, 100% { box-shadow: 0 0 0 0 rgba(46,213,115,0.4); }
+    50% { box-shadow: 0 0 0 5px rgba(46,213,115,0); }
+  }
+
+  /* ── Layout ── */
+  .main {
+    display: grid;
+    grid-template-columns: 280px 1fr 340px;
+    grid-template-rows: auto 1fr;
+    height: calc(100vh - 56px);
+    overflow: hidden;
+  }
+
+  /* ── Sidebar ── */
+  .sidebar {
+    background: var(--bg2);
+    border-right: 1px solid var(--border);
+    overflow-y: auto;
+    padding: 20px 0;
+    grid-row: 1 / 3;
+  }
+
+  .sidebar-section {
+    padding: 0 16px 16px;
+    border-bottom: 1px solid var(--border);
+    margin-bottom: 16px;
+  }
+
+  .sidebar-label {
+    font-family: var(--mono);
+    font-size: 10px;
+    font-weight: 600;
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+    color: var(--text3);
+    margin-bottom: 12px;
+    padding: 0 4px;
+  }
+
+  .task-card {
+    background: var(--bg3);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 12px;
+    margin-bottom: 8px;
+    cursor: pointer;
+    transition: all 0.15s ease;
+    position: relative;
+    overflow: hidden;
+  }
+
+  .task-card::before {
+    content: '';
+    position: absolute;
+    left: 0; top: 0; bottom: 0;
+    width: 3px;
+    border-radius: 3px 0 0 3px;
+  }
+
+  .task-card.easy::before { background: var(--green); }
+  .task-card.medium::before { background: var(--yellow); }
+  .task-card.hard::before { background: var(--red); }
+
+  .task-card:hover, .task-card.active {
+    border-color: var(--border2);
+    background: #1a2438;
+    transform: translateX(2px);
+  }
+
+  .task-card.active { border-color: var(--accent); }
+
+  .task-name {
+    font-family: var(--mono);
+    font-size: 12px;
+    font-weight: 600;
+    color: var(--text);
+    margin-bottom: 4px;
+  }
+
+  .task-desc {
+    font-size: 11px;
+    color: var(--text2);
+    line-height: 1.4;
+  }
+
+  .difficulty-badge {
+    display: inline-block;
+    font-family: var(--mono);
+    font-size: 9px;
+    font-weight: 700;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    padding: 2px 6px;
+    border-radius: 3px;
+    margin-bottom: 6px;
+  }
+  .diff-easy { background: rgba(46,213,115,0.15); color: var(--green); }
+  .diff-medium { background: rgba(255,211,42,0.15); color: var(--yellow); }
+  .diff-hard { background: rgba(255,71,87,0.15); color: var(--red); }
+
+  /* ── Center: Observation panel ── */
+  .obs-panel {
+    overflow-y: auto;
+    padding: 20px;
+    background: var(--bg);
+    border-right: 1px solid var(--border);
+  }
+
+  .panel-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    margin-bottom: 16px;
+  }
+
+  .panel-title {
+    font-family: var(--mono);
+    font-size: 11px;
+    font-weight: 600;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+    color: var(--text3);
+  }
+
+  .section-block {
+    background: var(--bg2);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    margin-bottom: 12px;
+    overflow: hidden;
+  }
+
+  .section-header {
+    padding: 8px 14px;
+    background: var(--bg3);
+    border-bottom: 1px solid var(--border);
+    font-family: var(--mono);
+    font-size: 11px;
+    font-weight: 600;
+    color: var(--text2);
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    letter-spacing: 0.05em;
+    text-transform: uppercase;
+  }
+
+  .count-badge {
+    background: var(--border2);
+    color: var(--text2);
+    font-size: 10px;
+    padding: 1px 6px;
+    border-radius: 10px;
+  }
+
+  /* Alert rows */
+  .alert-row {
+    padding: 10px 14px;
+    border-bottom: 1px solid var(--border);
+    display: grid;
+    grid-template-columns: 80px 140px 1fr;
+    gap: 10px;
+    align-items: start;
+    font-size: 12px;
+  }
+  .alert-row:last-child { border-bottom: none; }
+
+  .sev-badge {
+    font-family: var(--mono);
+    font-size: 9px;
+    font-weight: 700;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    padding: 2px 6px;
+    border-radius: 3px;
+    display: inline-block;
+  }
+  .sev-critical { background: rgba(255,71,87,0.2); color: var(--red); border: 1px solid rgba(255,71,87,0.3); }
+  .sev-high     { background: rgba(255,107,53,0.2); color: var(--orange); border: 1px solid rgba(255,107,53,0.3); }
+  .sev-medium   { background: rgba(255,211,42,0.2); color: var(--yellow); border: 1px solid rgba(255,211,42,0.3); }
+  .sev-low      { background: rgba(122,154,191,0.15); color: var(--text2); border: 1px solid rgba(122,154,191,0.2); }
+
+  .alert-service {
+    font-family: var(--mono);
+    font-size: 11px;
+    color: var(--cyan);
+    word-break: break-all;
+  }
+
+  .alert-message { color: var(--text); line-height: 1.4; }
+
+  /* Log rows */
+  .log-row {
+    padding: 6px 14px;
+    border-bottom: 1px solid var(--border);
+    font-family: var(--mono);
+    font-size: 11px;
+    display: grid;
+    grid-template-columns: 140px 50px 1fr;
+    gap: 8px;
+    align-items: start;
+  }
+  .log-row:last-child { border-bottom: none; }
+  .log-ts { color: var(--text3); }
+  .log-level-error { color: var(--red); font-weight: 600; }
+  .log-level-fatal { color: var(--red); font-weight: 700; }
+  .log-level-warn  { color: var(--yellow); }
+  .log-level-info  { color: var(--text3); }
+  .log-msg { color: var(--text); }
+
+  /* Metrics */
+  .metric-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(160px, 1fr));
+    gap: 1px;
+    background: var(--border);
+  }
+
+  .metric-cell {
+    background: var(--bg2);
+    padding: 10px 14px;
+  }
+
+  .metric-service { font-family: var(--mono); font-size: 10px; color: var(--text3); margin-bottom: 2px; }
+  .metric-name    { font-size: 11px; color: var(--text2); margin-bottom: 4px; }
+  .metric-value   { font-family: var(--mono); font-size: 18px; font-weight: 700; color: var(--text); }
+  .metric-unit    { font-family: var(--mono); font-size: 10px; color: var(--text3); }
+  .metric-value.danger { color: var(--red); }
+  .metric-value.warn   { color: var(--yellow); }
+  .metric-value.ok     { color: var(--green); }
+
+  /* Prompt box */
+  .prompt-box {
+    background: rgba(0,210,255,0.04);
+    border: 1px solid rgba(0,210,255,0.2);
+    border-radius: 8px;
+    padding: 14px;
+    font-size: 13px;
+    color: var(--text);
+    line-height: 1.6;
+    margin-bottom: 16px;
+  }
+
+  .prompt-box strong { color: var(--cyan); }
+
+  /* ── Right: Action + Results panel ── */
+  .action-panel {
+    background: var(--bg2);
+    overflow-y: auto;
+    display: flex;
+    flex-direction: column;
+  }
+
+  .action-top {
+    padding: 20px;
+    border-bottom: 1px solid var(--border);
+    flex-shrink: 0;
+  }
+
+  .field-group {
+    margin-bottom: 14px;
+  }
+
+  .field-label {
+    font-family: var(--mono);
+    font-size: 10px;
+    font-weight: 600;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+    color: var(--text3);
+    margin-bottom: 6px;
+    display: block;
+  }
+
+  textarea, input, select {
+    width: 100%;
+    background: var(--bg3);
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    color: var(--text);
+    font-family: var(--mono);
+    font-size: 12px;
+    padding: 8px 10px;
+    outline: none;
+    transition: border-color 0.15s;
+    resize: vertical;
+  }
+
+  textarea:focus, input:focus, select:focus {
+    border-color: var(--accent);
+  }
+
+  select option { background: var(--bg3); }
+
+  .tag-input-container {
+    background: var(--bg3);
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    padding: 6px;
+    display: flex;
+    flex-wrap: wrap;
+    gap: 4px;
+    min-height: 38px;
+    cursor: text;
+    transition: border-color 0.15s;
+  }
+  .tag-input-container:focus-within { border-color: var(--accent); }
+
+  .tag {
+    background: rgba(0,210,255,0.12);
+    border: 1px solid rgba(0,210,255,0.25);
+    color: var(--cyan);
+    font-family: var(--mono);
+    font-size: 11px;
+    padding: 2px 8px;
+    border-radius: 4px;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    cursor: default;
+  }
+
+  .tag-x {
+    cursor: pointer;
+    color: var(--text3);
+    font-size: 14px;
+    line-height: 1;
+    transition: color 0.1s;
+  }
+  .tag-x:hover { color: var(--red); }
+
+  .tag-input {
+    background: transparent;
+    border: none;
+    outline: none;
+    color: var(--text);
+    font-family: var(--mono);
+    font-size: 12px;
+    min-width: 120px;
+    flex: 1;
+    padding: 2px 4px;
+  }
+
+  .btn-submit {
+    width: 100%;
+    padding: 12px;
+    background: var(--cyan);
+    color: #000;
+    border: none;
+    border-radius: 8px;
+    font-family: var(--mono);
+    font-size: 13px;
+    font-weight: 700;
+    letter-spacing: 0.05em;
+    cursor: pointer;
+    transition: all 0.15s;
+    margin-top: 8px;
+  }
+
+  .btn-submit:hover { background: #33d9ff; transform: translateY(-1px); }
+  .btn-submit:active { transform: translateY(0); }
+  .btn-submit:disabled { background: var(--border2); color: var(--text3); cursor: not-allowed; transform: none; }
+
+  .btn-reset {
+    width: 100%;
+    padding: 8px;
+    background: transparent;
+    color: var(--text2);
+    border: 1px solid var(--border2);
+    border-radius: 6px;
+    font-family: var(--mono);
+    font-size: 12px;
+    cursor: pointer;
+    transition: all 0.15s;
+    margin-top: 6px;
+  }
+  .btn-reset:hover { border-color: var(--accent); color: var(--cyan); }
+
+  /* Results */
+  .results-panel {
+    padding: 20px;
+    flex: 1;
+  }
+
+  .reward-total {
+    text-align: center;
+    padding: 20px;
+    background: var(--bg3);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    margin-bottom: 16px;
+  }
+
+  .reward-label {
+    font-family: var(--mono);
+    font-size: 10px;
+    font-weight: 600;
+    letter-spacing: 0.15em;
+    text-transform: uppercase;
+    color: var(--text3);
+    margin-bottom: 8px;
+  }
+
+  .reward-number {
+    font-family: var(--mono);
+    font-size: 52px;
+    font-weight: 700;
+    line-height: 1;
+    transition: color 0.3s;
+  }
+
+  .reward-number.great { color: var(--green); }
+  .reward-number.ok    { color: var(--yellow); }
+  .reward-number.poor  { color: var(--red); }
+
+  .reward-bar-wrap {
+    margin-top: 12px;
+    height: 6px;
+    background: var(--border);
+    border-radius: 3px;
+    overflow: hidden;
+  }
+
+  .reward-bar {
+    height: 100%;
+    border-radius: 3px;
+    transition: width 0.6s cubic-bezier(0.34,1.56,0.64,1), background 0.3s;
+  }
+
+  .component-row {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    margin-bottom: 10px;
+    font-size: 12px;
+  }
+
+  .comp-label {
+    font-family: var(--mono);
+    font-size: 11px;
+    color: var(--text2);
+    width: 150px;
+    flex-shrink: 0;
+  }
+
+  .comp-bar-wrap {
+    flex: 1;
+    height: 4px;
+    background: var(--border);
+    border-radius: 2px;
+    overflow: hidden;
+  }
+
+  .comp-bar { height: 100%; border-radius: 2px; transition: width 0.5s ease; }
+
+  .comp-score {
+    font-family: var(--mono);
+    font-size: 11px;
+    width: 36px;
+    text-align: right;
+    flex-shrink: 0;
+  }
+
+  .feedback-box {
+    background: var(--bg3);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 12px;
+    margin-top: 12px;
+    font-size: 12px;
+    color: var(--text2);
+    line-height: 1.6;
+  }
+
+  .feedback-item {
+    display: flex;
+    align-items: flex-start;
+    gap: 6px;
+    margin-bottom: 4px;
+  }
+
+  .placeholder-state {
+    text-align: center;
+    padding: 40px 20px;
+    color: var(--text3);
+  }
+  .placeholder-state .icon { font-size: 32px; margin-bottom: 12px; }
+  .placeholder-state p { font-size: 12px; line-height: 1.6; }
+
+  /* History */
+  .history-item {
+    background: var(--bg3);
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    padding: 10px 12px;
+    margin-bottom: 6px;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    font-size: 12px;
+  }
+  .history-task { font-family: var(--mono); color: var(--text2); font-size: 11px; }
+  .history-reward { font-family: var(--mono); font-weight: 700; }
+
+  /* Loader */
+  .spinner {
+    display: inline-block;
+    width: 16px; height: 16px;
+    border: 2px solid rgba(0,210,255,0.2);
+    border-top-color: var(--cyan);
+    border-radius: 50%;
+    animation: spin 0.7s linear infinite;
+    vertical-align: middle;
+    margin-right: 8px;
+  }
+  @keyframes spin { to { transform: rotate(360deg); } }
+
+  /* Context */
+  .context-block {
+    padding: 10px 14px;
+  }
+  .context-kv {
+    font-family: var(--mono);
+    font-size: 11px;
+    color: var(--text2);
+    margin-bottom: 4px;
+  }
+  .context-key { color: var(--purple); }
+  .context-val { color: var(--text); }
+
+  /* Scrollbar */
+  ::-webkit-scrollbar { width: 5px; }
+  ::-webkit-scrollbar-track { background: transparent; }
+  ::-webkit-scrollbar-thumb { background: var(--border2); border-radius: 3px; }
+
+  .fade-in { animation: fadeIn 0.3s ease; }
+  @keyframes fadeIn { from { opacity: 0; transform: translateY(4px); } to { opacity: 1; transform: none; } }
+</style>
+</head>
+<body>
+
+<!-- Top bar -->
+<div class="topbar">
+  <div class="topbar-left">
+    <div class="logo">
+      <div class="logo-dot"></div>
+      INCIDENT RESPONSE TRIAGE
+    </div>
+    <span class="badge badge-openenv">OpenEnv</span>
+  </div>
+  <div style="display:flex;align-items:center;gap:12px;font-size:12px;color:var(--text2);">
+    <span><span class="status-dot"></span>API Live</span>
+    <span class="badge badge-live">v1.0.0</span>
+  </div>
+</div>
+
+<div class="main">
+
+  <!-- Sidebar: task selector -->
+  <div class="sidebar">
+    <div class="sidebar-section">
+      <div class="sidebar-label">Tasks</div>
+      <div class="task-card easy active" onclick="selectTask('task1_easy', this)">
+        <span class="difficulty-badge diff-easy">Easy</span>
+        <div class="task-name">task1_easy</div>
+        <div class="task-desc">Single service outage — payment-service DB connection failure</div>
+      </div>
+      <div class="task-card medium" onclick="selectTask('task2_medium', this)">
+        <span class="difficulty-badge diff-medium">Medium</span>
+        <div class="task-name">task2_medium</div>
+        <div class="task-desc">Cascading failure — auth-service down causes downstream failures</div>
+      </div>
+      <div class="task-card hard" onclick="selectTask('task3_hard', this)">
+        <span class="difficulty-badge diff-hard">Hard</span>
+        <div class="task-name">task3_hard</div>
+        <div class="task-desc">Partial degradation — memory leak causes subtle checkout latency</div>
+      </div>
+    </div>
+
+    <div class="sidebar-section">
+      <div class="sidebar-label">Session History</div>
+      <div id="history-list">
+        <div style="font-size:11px;color:var(--text3);padding:4px;">No runs yet</div>
+      </div>
+    </div>
+
+    <div style="padding:16px;">
+      <div class="sidebar-label">API Endpoints</div>
+      <div style="font-family:var(--mono);font-size:10px;color:var(--text3);line-height:2;">
+        <div><span style="color:var(--cyan)">POST</span> /reset</div>
+        <div><span style="color:var(--green)">POST</span> /step</div>
+        <div><span style="color:var(--purple)">GET</span>  /state</div>
+        <div><span style="color:var(--purple)">GET</span>  /tasks</div>
+        <div><span style="color:var(--purple)">GET</span>  /docs</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Center: Observation -->
+  <div class="obs-panel" id="obs-panel">
+    <div class="panel-header">
+      <span class="panel-title">⚡ Observation</span>
+      <span id="task-badge" class="badge badge-openenv">task1_easy</span>
+    </div>
+    <div id="obs-content">
+      <div class="placeholder-state">
+        <div class="icon">📡</div>
+        <p>Select a task and click <strong>Load Task</strong> to begin.<br/>The observation will appear here.</p>
+      </div>
+    </div>
+  </div>
+
+  <!-- Right: Action + Results -->
+  <div class="action-panel">
+    <div class="action-top">
+      <div class="panel-title" style="margin-bottom:16px;">🎯 Action</div>
+
+      <div class="field-group">
+        <label class="field-label">Root Cause *</label>
+        <input type="text" id="root_cause" placeholder="e.g. payment-service postgres connection pool exhausted"/>
+      </div>
+
+      <div class="field-group">
+        <label class="field-label">Silence Alert IDs (press Enter)</label>
+        <div class="tag-input-container" id="tag-container" onclick="document.getElementById('tag-input').focus()">
+          <input class="tag-input" id="tag-input" placeholder="alert-003" onkeydown="handleTagInput(event)"/>
+        </div>
+      </div>
+
+      <div class="field-group">
+        <label class="field-label">Escalate To</label>
+        <input type="text" id="escalate_to" placeholder="e.g. payments-team"/>
+      </div>
+
+      <div class="field-group">
+        <label class="field-label">Severity Assessment *</label>
+        <select id="severity_assessment">
+          <option value="low">low</option>
+          <option value="medium">medium</option>
+          <option value="high" selected>high</option>
+          <option value="critical">critical</option>
+        </select>
+      </div>
+
+      <div class="field-group">
+        <label class="field-label">Incident Summary *</label>
+        <textarea id="incident_summary" rows="4" placeholder="2–4 sentence summary: what failed, why, and business impact..."></textarea>
+      </div>
+
+      <div class="field-group">
+        <label class="field-label">Proposed Fix (optional)</label>
+        <input type="text" id="proposed_fix" placeholder="e.g. Restart service and check DB connections"/>
+      </div>
+
+      <button class="btn-submit" id="btn-submit" onclick="submitAction()">Submit Action</button>
+      <button class="btn-reset" onclick="loadTask()">↺ Reset / Load Task</button>
+    </div>
+
+    <div class="results-panel" id="results-panel">
+      <div class="placeholder-state">
+        <div class="icon">📊</div>
+        <p>Results will appear here after you submit an action.</p>
+      </div>
+    </div>
+  </div>
+
+</div>
+
+<script>
+  const BASE = window.location.origin;
+  let currentTask = 'task1_easy';
+  let silencedIds = [];
+  let history = [];
+
+  // ── Tag input ──────────────────────────────────────────────────────────────
+  function handleTagInput(e) {
+    if (e.key === 'Enter' || e.key === ',') {
+      e.preventDefault();
+      const val = e.target.value.trim().replace(',','');
+      if (val && !silencedIds.includes(val)) {
+        silencedIds.push(val);
+        renderTags();
+      }
+      e.target.value = '';
+    } else if (e.key === 'Backspace' && !e.target.value) {
+      silencedIds.pop();
+      renderTags();
+    }
+  }
+
+  function renderTags() {
+    const container = document.getElementById('tag-container');
+    container.innerHTML = '';
+    silencedIds.forEach((id, i) => {
+      const tag = document.createElement('span');
+      tag.className = 'tag';
+      tag.innerHTML = `${id}<span class="tag-x" onclick="removeTag(${i})">×</span>`;
+      container.appendChild(tag);
+    });
+    const input = document.createElement('input');
+    input.className = 'tag-input';
+    input.id = 'tag-input';
+    input.placeholder = silencedIds.length ? '' : 'alert-003';
+    input.onkeydown = handleTagInput;
+    container.appendChild(input);
+  }
+
+  function removeTag(i) {
+    silencedIds.splice(i, 1);
+    renderTags();
+  }
+
+  // ── Task selection ─────────────────────────────────────────────────────────
+  function selectTask(taskId, el) {
+    document.querySelectorAll('.task-card').forEach(c => c.classList.remove('active'));
+    el.classList.add('active');
+    currentTask = taskId;
+    document.getElementById('task-badge').textContent = taskId;
+    loadTask();
+  }
+
+  async function loadTask() {
+    silencedIds = [];
+    renderTags();
+    document.getElementById('root_cause').value = '';
+    document.getElementById('escalate_to').value = '';
+    document.getElementById('incident_summary').value = '';
+    document.getElementById('proposed_fix').value = '';
+    document.getElementById('btn-submit').disabled = false;
+
+    document.getElementById('obs-content').innerHTML = `
+      <div class="placeholder-state">
+        <div class="icon"><span class="spinner"></span></div>
+        <p>Loading task...</p>
+      </div>`;
+    document.getElementById('results-panel').innerHTML = `
+      <div class="placeholder-state">
+        <div class="icon">📊</div>
+        <p>Results will appear here after you submit an action.</p>
+      </div>`;
+
+    try {
+      const res = await fetch(`${BASE}/reset`, {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({task_id: currentTask})
+      });
+      const obs = await res.json();
+      renderObservation(obs);
+    } catch(e) {
+      document.getElementById('obs-content').innerHTML = `<div class="placeholder-state"><p style="color:var(--red)">❌ Failed to connect to API: ${e.message}</p></div>`;
+    }
+  }
+
+  // ── Render observation ─────────────────────────────────────────────────────
+  function renderObservation(obs) {
+    let html = `<div class="fade-in">`;
+
+    // Prompt
+    html += `<div class="prompt-box"><strong>📋 Mission:</strong> ${obs.prompt}</div>`;
+
+    // Alerts
+    html += `<div class="section-block">
+      <div class="section-header">🚨 Alerts <span class="count-badge">${obs.alerts.length}</span></div>`;
+    obs.alerts.forEach(a => {
+      html += `<div class="alert-row">
+        <span class="sev-badge sev-${a.severity}">${a.severity}</span>
+        <span class="alert-service">${a.service}<br/><span style="color:var(--text3);font-size:10px">${a.id}</span></span>
+        <span class="alert-message">${a.message}
+          ${a.metric_value != null ? `<br/><span style="font-family:var(--mono);font-size:10px;color:var(--text3)">val: ${a.metric_value} / threshold: ${a.metric_threshold}</span>` : ''}
+        </span>
+      </div>`;
+    });
+    html += `</div>`;
+
+    // Logs
+    html += `<div class="section-block">
+      <div class="section-header">📜 Logs <span class="count-badge">${obs.logs.length}</span></div>`;
+    obs.logs.forEach(l => {
+      const cls = `log-level-${l.level.toLowerCase()}`;
+      html += `<div class="log-row">
+        <span class="log-ts">${l.timestamp.replace('T',' ').replace('Z','')}</span>
+        <span class="${cls}">${l.level}</span>
+        <span class="log-msg">[${l.service}] ${l.message}</span>
+      </div>`;
+    });
+    html += `</div>`;
+
+    // Metrics
+    html += `<div class="section-block">
+      <div class="section-header">📈 Metrics <span class="count-badge">${obs.metrics.length}</span></div>
+      <div class="metric-grid">`;
+    obs.metrics.forEach(m => {
+      const pct = m.unit === '%' ? m.value : null;
+      const cls = pct != null ? (pct > 90 ? 'danger' : pct > 70 ? 'warn' : 'ok') : '';
+      html += `<div class="metric-cell">
+        <div class="metric-service">${m.service}</div>
+        <div class="metric-name">${m.name}</div>
+        <div class="metric-value ${cls}">${m.value.toLocaleString()}<span class="metric-unit"> ${m.unit}</span></div>
+      </div>`;
+    });
+    html += `</div></div>`;
+
+    // Context
+    if (obs.context && Object.keys(obs.context).length) {
+      html += `<div class="section-block">
+        <div class="section-header">🗂 Context</div>
+        <div class="context-block">`;
+      for (const [k, v] of Object.entries(obs.context)) {
+        html += `<div class="context-kv"><span class="context-key">${k}:</span> <span class="context-val">${typeof v === 'object' ? JSON.stringify(v) : v}</span></div>`;
+      }
+      html += `</div></div>`;
+    }
+
+    html += `</div>`;
+    document.getElementById('obs-content').innerHTML = html;
+    document.getElementById('task-badge').textContent = obs.task_id;
+  }
+
+  // ── Submit action ──────────────────────────────────────────────────────────
+  async function submitAction() {
+    const btn = document.getElementById('btn-submit');
+    const root_cause = document.getElementById('root_cause').value.trim();
+    const incident_summary = document.getElementById('incident_summary').value.trim();
+    if (!root_cause || !incident_summary) {
+      alert('Root Cause and Incident Summary are required.');
+      return;
+    }
+
+    btn.disabled = true;
+    btn.innerHTML = '<span class="spinner"></span>Submitting...';
+
+    const action = {
+      root_cause,
+      silenced_alert_ids: [...silencedIds],
+      escalate_to: document.getElementById('escalate_to').value.trim() || null,
+      incident_summary,
+      severity_assessment: document.getElementById('severity_assessment').value,
+      proposed_fix: document.getElementById('proposed_fix').value.trim() || null,
+    };
+
+    try {
+      const res = await fetch(`${BASE}/step`, {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify(action)
+      });
+      const data = await res.json();
+      renderResults(data.reward, data.done, data.info);
+      addHistory(currentTask, data.reward.total);
+    } catch(e) {
+      document.getElementById('results-panel').innerHTML = `<div class="placeholder-state"><p style="color:var(--red)">❌ Error: ${e.message}</p></div>`;
+    }
+
+    btn.innerHTML = 'Submit Action';
+    btn.disabled = false;
+  }
+
+  // ── Render results ─────────────────────────────────────────────────────────
+  function renderResults(reward, done, info) {
+    const total = reward.total;
+    const cls = total >= 0.8 ? 'great' : total >= 0.5 ? 'ok' : 'poor';
+    const barColor = total >= 0.8 ? 'var(--green)' : total >= 0.5 ? 'var(--yellow)' : 'var(--red)';
+
+    const components = [
+      { label: 'root_cause',     score: reward.root_cause_score,      color: 'var(--cyan)' },
+      { label: 'escalation',     score: reward.escalation_score,       color: 'var(--purple)' },
+      { label: 'summary',        score: reward.summary_score,          color: 'var(--blue)' },
+      { label: 'noise_filter',   score: reward.noise_filtering_score,  color: 'var(--orange)' },
+    ];
+
+    const feedbackItems = reward.feedback.split(' | ').filter(Boolean);
+
+    let html = `<div class="fade-in">
+      <div class="reward-total">
+        <div class="reward-label">Total Reward</div>
+        <div class="reward-number ${cls}">${total.toFixed(3)}</div>
+        <div class="reward-bar-wrap">
+          <div class="reward-bar" style="width:${total*100}%;background:${barColor}"></div>
+        </div>
+        ${reward.penalty > 0 ? `<div style="font-family:var(--mono);font-size:11px;color:var(--red);margin-top:8px;">penalty: -${reward.penalty.toFixed(3)}</div>` : ''}
+      </div>
+
+      <div style="margin-bottom:16px;">
+        <div class="panel-title" style="margin-bottom:12px;">Component Breakdown</div>`;
+
+    components.forEach(c => {
+      const scoreLabel = c.score.toFixed(2);
+      const scolor = c.score >= 0.8 ? 'var(--green)' : c.score >= 0.5 ? 'var(--yellow)' : 'var(--red)';
+      html += `<div class="component-row">
+        <span class="comp-label">${c.label}</span>
+        <div class="comp-bar-wrap">
+          <div class="comp-bar" style="width:${c.score*100}%;background:${c.color}"></div>
+        </div>
+        <span class="comp-score" style="color:${scolor}">${scoreLabel}</span>
+      </div>`;
+    });
+
+    html += `</div>
+      <div class="panel-title" style="margin-bottom:10px;">Grader Feedback</div>
+      <div class="feedback-box">`;
+    feedbackItems.forEach(item => {
+      html += `<div class="feedback-item">${item}</div>`;
+    });
+    html += `</div>`;
+
+    if (done) {
+      html += `<div style="text-align:center;margin-top:16px;">
+        <button class="btn-reset" onclick="loadTask()" style="width:auto;padding:8px 24px;">↺ Try Again</button>
+      </div>`;
+    }
+
+    html += `</div>`;
+    document.getElementById('results-panel').innerHTML = html;
+  }
+
+  // ── History ────────────────────────────────────────────────────────────────
+  function addHistory(taskId, reward) {
+    history.unshift({taskId, reward, ts: new Date().toLocaleTimeString()});
+    const list = document.getElementById('history-list');
+    list.innerHTML = history.slice(0,8).map(h => {
+      const cls = h.reward >= 0.8 ? 'var(--green)' : h.reward >= 0.5 ? 'var(--yellow)' : 'var(--red)';
+      return `<div class="history-item">
+        <div>
+          <div class="history-task">${h.taskId}</div>
+          <div style="font-size:10px;color:var(--text3)">${h.ts}</div>
+        </div>
+        <span class="history-reward" style="color:${cls}">${h.reward.toFixed(3)}</span>
+      </div>`;
+    }).join('');
+  }
+
+  // ── Init ───────────────────────────────────────────────────────────────────
+  loadTask();
+</script>
+</body>
+</html>
