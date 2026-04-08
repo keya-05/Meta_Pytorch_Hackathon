@@ -47,7 +47,7 @@ Rules:
 
 
 def call_env(method: str, endpoint: str, payload: dict = None) -> dict:
-    url = f"{API_BASE_URL}{endpoint}"
+    url = f"{SPACE_URL}{endpoint}"
     with httpx.Client(timeout=30) as http:
         if method == "POST":
             r = http.post(url, json=payload or {})
