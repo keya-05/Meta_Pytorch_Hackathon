@@ -12,14 +12,16 @@ import httpx
 from openai import OpenAI
 
 # ── Config from environment variables ─────────────────────────────────────────
-API_BASE_URL = os.environ.get("API_BASE_URL", "http://localhost:7860")
-MODEL_NAME   = os.environ.get("MODEL_NAME", "gpt-4o")
-HF_TOKEN     = os.environ.get("HF_TOKEN", "")
-OPENAI_API_KEY = os.environ.get("OPENAI_API_KEY", HF_TOKEN)
+API_BASE_URL = os.environ["API_BASE_URL"]
+API_KEY = os.environ["API_KEY"]
+MODEL_NAME = os.environ.get("MODEL_NAME", "gpt-4o")
 
 TASKS = ["task1_easy", "task2_medium", "task3_hard"]
 
-client = OpenAI(api_key=OPENAI_API_KEY)
+client = OpenAI(
+    api_key=API_KEY,
+    base_url=API_BASE_URL
+)
 
 SYSTEM_PROMPT = """You are an expert Site Reliability Engineer (SRE) performing incident triage.
 You will be given alerts, logs, and metrics from a production system.
