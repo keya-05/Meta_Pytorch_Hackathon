@@ -24,13 +24,20 @@ SYSTEM_PROMPT = """You are an expert Site Reliability Engineer (SRE) performing 
 Respond with ONLY valid JSON. Identify the root cause, silence noise, and propose a fix."""
 
 def normalize_score(score: float) -> float:
-    """Ensures score is strictly > 0 and < 1 as per validator requirements."""
-    # We use 0.001 and 0.999 to stay safely away from the boundaries
-    if score >= 1.0:
-        return 0.999
-    if score <= 0.0:
-        return 0.001
-    return round(score, 4) # Maintain some precision while staying within bounds
+    """
+    Forces scores into the strict (0, 1) range.
+    1.0 becomes 0.99
+    0.0 becomes 0.01
+    """
+    try:
+        val = float(score)
+        if val >= 1.0:
+            return 0.99
+        if val <= 0.0:
+            return 0.01
+        return round(val, 3)
+    except:
+        return 0.01
 
 def call_env(method: str, endpoint: str, payload: dict = None) -> dict:
     url = f"{ENV_URL.rstrip('/')}{endpoint}"
@@ -72,7 +79,7 @@ def run_task(task_id: str) -> dict:
     # Apply strict normalization to the individual task score
     final_score = normalize_score(step_result["reward"]["total"])
 
-    print(f"[END] task={task_id} score={final_score} steps=1", flush=True)
+    print(f"[END] task={task_id} score={final_score:0.3f} steps=1", flush=True)
 
     return {
         "task_id": task_id,
@@ -96,7 +103,7 @@ def main():
     raw_avg = sum(r["reward"] for r in results) / len(results)
     avg_reward = normalize_score(raw_avg)
 
-    print(f"[END] event=baseline_run_complete average_reward={avg_reward}", flush=True)
+    print(f"[END] event=baseline_run_complete average_reward={avg_reward:0.3f}", flush=True)
 
 if __name__ == "__main__":
     main()
