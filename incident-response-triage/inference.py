@@ -15,6 +15,7 @@ from openai import OpenAI
 API_BASE_URL = os.environ["API_BASE_URL"]
 API_KEY = os.environ["API_KEY"]
 MODEL_NAME = os.environ.get("MODEL_NAME", "gpt-4o")
+SPACE_URL = "https://KeyaChaudhary-incident-response-triage.hf.space"
 
 TASKS = ["task1_easy", "task2_medium", "task3_hard"]
 
