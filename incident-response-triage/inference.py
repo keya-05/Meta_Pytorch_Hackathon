@@ -12,16 +12,16 @@ import httpx
 from openai import OpenAI
 
 # ── Config from environment variables ─────────────────────────────────────────
-API_BASE_URL = os.environ["API_BASE_URL"]
-API_KEY = os.environ["API_KEY"]
+LLM_KEY = os.environ.get("API_KEY", os.environ.get("OPENAI_API_KEY"))
+LLM_BASE = os.environ.get("OPENAI_BASE_URL", "https://api.openai.com/v1")
 MODEL_NAME = os.environ.get("MODEL_NAME", "gpt-4o")
-SPACE_URL = "https://KeyaChaudhary-incident-response-triage.hf.space"
+ENV_URL = os.environ.get("ENV_URL", os.environ.get("API_BASE_URL", "https://KeyaChaudhary-incident-response-triage.hf.space"))
 
 TASKS = ["task1_easy", "task2_medium", "task3_hard"]
 
 client = OpenAI(
-    api_key=API_KEY,
-    base_url=API_BASE_URL
+    api_key=LLM_KEY,
+    base_url=LLM_BASE
 )
 
 SYSTEM_PROMPT = """You are an expert Site Reliability Engineer (SRE) performing incident triage.
@@ -47,7 +47,7 @@ Rules:
 
 
 def call_env(method: str, endpoint: str, payload: dict = None) -> dict:
-    url = f"{SPACE_URL}{endpoint}"
+    url = f"{ENV_URL.rstrip('/')}{endpoint}"
     with httpx.Client(timeout=30) as http:
         if method == "POST":
             r = http.post(url, json=payload or {})
@@ -120,7 +120,13 @@ Respond with the JSON action object now.
     )
 
     # ── Submit action to env ───────────────────────────────────────────────────
-    step_result = call_env("POST", "/step", action_dict)
+    step_payload = {
+        "task_id": task_id,
+        **action_dict
+    }
+
+    print(action_dict, flush=True)
+    step_result = call_env("POST", "/step", step_payload)
     reward = step_result["reward"]
     done   = step_result["done"]
     info   = step_result["info"]
