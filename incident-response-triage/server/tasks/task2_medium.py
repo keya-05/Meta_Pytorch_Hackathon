@@ -5,7 +5,7 @@ throwing errors, but the REAL root cause is auth-service returning 503s.
 Multiple noise alerts. Agent must trace upstream dependency failure.
 """
 
-from server.models import Alert, LogEntry, Metric, Observation, Action, Reward, AlertSeverity
+from server.models import Alert, LogEntry, Metric, Observation, Action, Reward, AlertSeverity, _strict_clamp
 
 TASK_ID = "task2_medium"
 
@@ -203,7 +203,7 @@ def grade(action: Action) -> Reward:
         0.25 * escalation_score +
         0.20 * summary_score
     ) - penalty
-    total = max(0.0, min(1.0, total))
+    total = _strict_clamp(total)
 
     return Reward(
         total=round(total, 4),

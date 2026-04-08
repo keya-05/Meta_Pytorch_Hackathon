@@ -83,8 +83,13 @@ class Action(BaseModel):
 
 # ── Reward ─────────────────────────────────────────────────────────────────────
 
+def _strict_clamp(v: float) -> float:
+    """Clamp to strictly open interval (0.001, 0.999) as required by validator."""
+    return round(max(0.001, min(0.999, v)), 4)
+
+
 class Reward(BaseModel):
-    total: float = Field(ge=0.0, le=1.0, description="Overall reward 0.0–1.0")
+    total: float = Field(ge=0.001, le=0.999, description="Overall reward strictly in (0,1)")
     root_cause_score: float = Field(ge=0.0, le=1.0)
     noise_filtering_score: float = Field(ge=0.0, le=1.0)
     escalation_score: float = Field(ge=0.0, le=1.0)

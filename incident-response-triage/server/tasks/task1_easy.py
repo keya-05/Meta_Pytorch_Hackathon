@@ -6,7 +6,7 @@ Agent must: identify root cause, silence 1 noise alert, escalate to payments tea
 write a summary.
 """
 
-from server.models import Alert, LogEntry, Metric, Observation, Action, Reward, AlertSeverity
+from server.models import Alert, LogEntry, Metric, Observation, Action, Reward, AlertSeverity, _strict_clamp
 
 TASK_ID = "task1_easy"
 
@@ -152,7 +152,7 @@ def grade(action: Action) -> Reward:
         0.25 * escalation_score +
         0.20 * summary_score
     ) - penalty
-    total = max(0.0, min(1.0, total))
+    total = _strict_clamp(total)
 
     return Reward(
         total=round(total, 4),

@@ -7,7 +7,7 @@ Multiple misleading alerts. Agent must correlate 4+ signals to find the subtle c
 No obvious error logs — only warnings and unusual patterns.
 """
 
-from server.models import Alert, LogEntry, Metric, Observation, Action, Reward, AlertSeverity
+from server.models import Alert, LogEntry, Metric, Observation, Action, Reward, AlertSeverity, _strict_clamp
 
 TASK_ID = "task3_hard"
 
@@ -244,7 +244,7 @@ def grade(action: Action) -> Reward:
         0.25 * escalation_score +
         0.20 * summary_score
     ) - penalty
-    total = max(0.0, min(1.0, total))
+    total = _strict_clamp(total)
 
     return Reward(
         total=round(total, 4),
